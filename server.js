@@ -8,7 +8,7 @@ const server = require('http').Server(app);
 // Redis
 
 const redis = require('redis');
-const client = redis.createClient(process.env.REDIS_URI);
+const client = redis.createClient(process.env.REDISCLOUD_URL);
 
 
 // Routes
