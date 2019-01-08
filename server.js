@@ -26,7 +26,7 @@ app.use(function(err, req, res, next) {
   console.error(err);
   let message = err.message;
   if (err.errors) {
-    message += ' ' + _.pluck(err.errors, 'message').join(' ');
+    message += ' ' + err.errors.map(e => e.message).join(' ');
   }
   res.status(res.statusCode==200?(err.status?err.status:500):res.statusCode);
   return res.json(_.defaults({ message: message }, err, {
