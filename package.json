@@ -4,15 +4,19 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "start:dev": "NODE_ENV=development PORT=3333 node server.js",
+    "start:dev": "nodemon -r ./env/development.js server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Dustin Coffey <dustin@cass-solutions.com>",
   "license": "ISC",
   "dependencies": {
+    "bluebird": "^3.5.3",
     "express": "^4.16.4",
     "express-jwt": "^5.3.1",
     "jsonwebtoken": "^8.4.0",
-    "redis": "^2.8.0"
+    "pug": "^2.0.3",
+    "redis": "^2.8.0",
+    "socket.io": "^2.2.0",
+    "underscore": "^1.9.1"
   }
 }
