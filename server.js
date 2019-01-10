@@ -124,6 +124,7 @@ app.use(async (req, res, next) => {
 
 app.get('/', async (req, res, next) => {
   let h = `${req.protocol}://${req.hostname}`;
+  console.log('h', h);
   let door_status = await pub.getAsync('door-status');
   res.render('index', { door_status, h });
 });
