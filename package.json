@@ -10,13 +10,16 @@
   "author": "Dustin Coffey <dustin@cass-solutions.com>",
   "license": "ISC",
   "dependencies": {
+    "bcrypt": "^3.0.3",
     "bluebird": "^3.5.3",
+    "body-parser": "^1.18.3",
     "express": "^4.16.4",
-    "express-jwt": "^5.3.1",
     "jsonwebtoken": "^8.4.0",
+    "mongodb": "^3.1.10",
     "pug": "^2.0.3",
     "redis": "^2.8.0",
     "socket.io": "^2.2.0",
+    "socketio-jwt": "^4.5.0",
     "underscore": "^1.9.1"
   }
 }

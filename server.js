@@ -1,23 +1,50 @@
 
+
 const express = require('express');
 const app = express();
 const server = require('http').Server(app);
 
-const bluebird = require('bluebird');
+const { MongoClient, ObjectId } = require('mongodb');
+
 const _ = require('underscore');
 const path = require('path');
+
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const socketioJwt = require('socketio-jwt');
+const bodyParser = require('body-parser');
 
 const events = require('events');
 const em = new events.EventEmitter();
 
-let DOOR_STATUS = 'UNKNOWN';
+
+let client = null;
+let db = null;
+
+global.Promise = require('bluebird');
+
+const mongoConnect = async () => {
+  if (client && db) return Promise.resolve(db);
+  try {
+    client = await MongoClient.connect(process.env.MONGODB_URI, { useNewUrlParser: true });
+    if (!client) {
+      return Promise.reject('Unable to connect to MongoDB');
+    }
+    db = client.db();
+    return Promise.resolve(db);
+  }
+  catch (err) {
+    return Promise.reject(err);
+  }
+};
+
 
 // Redis
 
 const redis = require('redis');
 
-bluebird.promisifyAll(redis.RedisClient.prototype);
-bluebird.promisifyAll(redis.Multi.prototype);
+Promise.promisifyAll(redis.RedisClient.prototype);
+Promise.promisifyAll(redis.Multi.prototype);
 
 const sub = redis.createClient(process.env.REDISCLOUD_URL);
 const pub = redis.createClient(process.env.REDISCLOUD_URL);
@@ -26,8 +53,7 @@ const pub = redis.createClient(process.env.REDISCLOUD_URL);
 sub.on('message', (channel, message) => {
   console.log(channel, message);
   if ('door_status' === channel) {
-    DOOR_STATUS = message;
-    em.emit('door', DOOR_STATUS);
+    em.emit('door', message);
   }
 });
 
@@ -38,18 +64,35 @@ sub.subscribe('door_status');
 
 const io = require('socket.io')(server);
 
-//em.on('door', (ds) => io.emit('door', ds));
-
-io.on('connect', function(socket) {
+io.on('connect', socketioJwt.authorize({
+  secret: process.env.JWT_ACCESS_SECRET,
+  timeout: 10000,
+  additional_auth: async (decoded, onSuccess, onError) => {
+    try {
+      const q = { _id: ObjectId.createFromHexString(decoded.user_id) };
+      const o = { projection: { password: 0 } };
+      const user = await db.collection('users').findOne(q, o);
+      if (!user) return onError(new Error('Failure!'));
+      onSuccess();
+    }
+    catch (err) {
+      onError(err);
+    }
+  }
+})).on('authenticated', function(socket) {
 
   this.doorListener = (ds) => {
-    console.log('socket door listener...', ds);
     this.emit('door status', ds);
   }
 
   em.on('door', this.doorListener);
 
-  this.on('disconnect', () => {
+  socket.on('trigger door', () => {
+    pub.publish('command', 'TRIGGERDOOR');
+    socket.emit('door triggered', 'Triggered...');
+  });
+
+  socket.on('disconnect', () => {
     em.removeListener('door', this.doorListener);
   });
 
@@ -59,24 +102,52 @@ io.on('connect', function(socket) {
 // Config Stuff
 
 app
-  .set('views', path.normalize(__dirname + '/views'))
+  .set('views', path.normalize(`${__dirname}/views`))
   .set('view engine', 'pug');
+
+
+// MW
+
+app.use(async (req, res, next) => {
+  if (db) return next();
+  try {
+    await mongoConnect();
+    return next();
+  }
+  catch (err) {
+    return next(err);
+  }
+});
 
 
 // Routes
 
 app.get('/', async (req, res, next) => {
-  // Load html page that shows door status
-  // and a button to trigger the garage door
-  // and a button to refresh the door status.
-  //pub.publish('command', 'GETSTATUS');
+  let h = `${req.protocol}://${req.hostname}:${process.env.PORT}`;
   let door_status = await pub.getAsync('door-status');
-  res.render('index', { door_status });
+  res.render('index', { door_status, h });
 });
 
-app.post('/trigger-door', (req, res, next) => {
-  pub.publish('command', 'TRIGGERDOOR');
-  res.send('Triggering door...');
+const urlencodedParser = bodyParser.urlencoded({ extended: false });
+
+app.post('/signin', urlencodedParser, async (req, res, next) => {
+  console.log('req.body', req.body);
+  let name = req.body.name;
+  try {
+    const user = await db.collection('users').findOne({ name });
+    if (!user) return next(new Error('Failure!'));
+    const pass = await bcrypt.compare(req.body.pw, user.password);
+    if (!pass) return next(new Error('Failure!'));
+    const token = jwt.sign(
+      { user_id: user._id },
+      process.env.JWT_ACCESS_SECRET,
+      { expiresIn: '365d' }
+    );
+    return res.json({ token });
+  }
+  catch (e) {
+    return next(e);
+  }
 });
 
 
@@ -100,7 +171,6 @@ app.use((err, req, res, next) => {
 
 
 
-
-server.listen(process.env.PORT, () => {
+server.listen(process.env.PORT, async () => {
   console.log('Stormcloud Garage Door listening on', process.env.PORT, process.env.NODE_ENV);
 });

@@ -14,13 +14,17 @@ html
 
 
   body
-    h1 Door is <span id="door-status">#{door_status}</span>
+    div#main
+      h1 Door is <span id="door-status">#{door_status}</span>
 
-    button#trigger-door Trigger door
-    div#logs
+      button#trigger-door Trigger door
+      div#logs
 
+    div#signin
+      input(type='text')#name
+      input(type='password')#pw
+      button#submit Sign in
 
-    //-script(type='text/javascript', src='https://unpkg.com/axios/dist/axios.min.js')
     script(type='text/javascript', src='/socket.io/socket.io.js')
     script(
       src='https://code.jquery.com/jquery-3.3.1.min.js',
@@ -29,20 +33,57 @@ html
     )
     script(type='text/javascript').
       (function() {
-        const socket = io();
-        socket.on('door status', (ds) => {
-          $('span#door-status').text(ds);
-        });
+        const h = !{JSON.stringify(h)}
+        const socket = io.connect(h);
 
-        $('button#trigger-door').click(function() {
+        const setupSocket = (token) => {
+
+          socket.on('connect', () => {
+            socket.on('authenticated', () => {
+
+              socket.on('door status', (ds) => {
+                $('span#door-status').text(ds);
+              });
+
+              $('button#trigger-door').click(() => {
+                socket.emit('trigger door');
+              });
+
+            }).emit('authenticate', { token });
+
+          });
+        };
+
+        const token = window.localStorage.getItem('scgdt');
+
+        if (token) {
+          $('#signin').hide();
+          $('#main').show();
+          return setupSocket(token);
+        }
+        else {
+          $('#main').hide();
+          $('#signin').show();
+        }
+
+        $('#signin button#submit').click((e) => {
+          e.preventDefault();
+          const n = $('#signin input#name').val();
+          const p = $('#signin input#pw').val();
           $.ajax({
-            url: '/trigger-door',
             type: 'POST',
-            dataType: 'text',
-            success: function(data) {
-              $('div#logs').append('<p>'+data+'</p>');
+            url: '/signin',
+            data: { name: n, pw: p },
+            dataType: 'json',
+            success: (data) => {
+              console.log('data', data);
+              if (data.token) {
+                window.localStorage.setItem('scgdt', data.token);
+                setupSocket(data.token);
+              }
             }
           });
 
         });
+
       })();
