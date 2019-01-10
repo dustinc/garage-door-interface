@@ -123,7 +123,7 @@ app.use(async (req, res, next) => {
 // Routes
 
 app.get('/', async (req, res, next) => {
-  let h = `${req.protocol}://${req.hostname}:${process.env.PORT}`;
+  let h = `${req.protocol}://${req.hostname}`;
   let door_status = await pub.getAsync('door-status');
   res.render('index', { door_status, h });
 });
@@ -131,7 +131,6 @@ app.get('/', async (req, res, next) => {
 const urlencodedParser = bodyParser.urlencoded({ extended: false });
 
 app.post('/signin', urlencodedParser, async (req, res, next) => {
-  console.log('req.body', req.body);
   let name = req.body.name;
   try {
     const user = await db.collection('users').findOne({ name });
